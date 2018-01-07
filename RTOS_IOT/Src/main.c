@@ -45,6 +45,7 @@
 #include "stm32l0xx_hal.h"
 #include "cmsis_os.h"
 #include "HTS221.h"
+#include "NVM_Manager.h"
 
 /* USER CODE BEGIN Includes */
 #define USING_EEPROM
@@ -63,6 +64,7 @@ IRDA_HandleTypeDef hirda1;
 UART_HandleTypeDef huart2;
 
 
+extern osMutexId MutexEeprom;
 
 //osThreadId defaultTaskHandle;
 
@@ -273,6 +275,7 @@ int main(void)
 
   /* USER CODE END RTOS_QUEUES */
  
+  EEPROM_Initialize();
   /* Start scheduler */
   osKernelStart();
   
@@ -532,6 +535,7 @@ void func_NVM_Manager(void const* argument){
 	for(;;){
 //			TODO: Copy data from Queue then write into the EEPROM.
 		xQueueReceive(Queue_SendTo_TaskNVM,&Rawdata,portMAX_DELAY);
+		osMutexWait(MutexEeprom, osWaitForever);
 		switch (Rawdata.EventId) {
 			case EV_ReturnFromBlinkLED:
 				break;
@@ -618,8 +622,11 @@ void func_LEDBlink (void const* argument){
 	{
 		thread1_counter++;
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-//		osDelay(1000);
 		osDelayUntil(&xLastTickWakeup,1000);
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+		osDelayUntil(&xLastTickWakeup,1000);
+
+//		osDelay(1000);
 	}
 }
 
