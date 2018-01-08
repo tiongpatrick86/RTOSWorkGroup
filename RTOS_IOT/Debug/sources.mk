@@ -17,6 +17,7 @@ C_DEPS :=
 SUBDIRS := \
 Drivers/STM32L0xx_HAL_Driver/Src \
 Middlewares/MemoryManager \
+Middlewares/SerialManager \
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS \
 Middlewares/Third_Party/FreeRTOS/Source \
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM0 \

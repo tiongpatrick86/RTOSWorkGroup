@@ -78,6 +78,7 @@ void task_EepromManager ( void const* argument ){
 			EEPROM_Clean();
 
 			osMutexRelease(MutexEeprom);
+
 			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin,GPIO_PIN_RESET);
 
 	}

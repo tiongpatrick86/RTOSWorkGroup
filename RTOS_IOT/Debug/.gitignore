@@ -2,3 +2,5 @@
 /Middlewares/
 /Src/
 /startup/
+/sources.mk
+/objects.mk

@@ -46,6 +46,8 @@
 #include "cmsis_os.h"
 #include "HTS221.h"
 #include "NVM_Manager.h"
+#include "debug_led.h"
+#include "console.h"
 
 /* USER CODE BEGIN Includes */
 #define USING_EEPROM
@@ -77,7 +79,6 @@ uint8_t updateCounter = 0;
 osThreadId Task_NVM_ReadWrite;
 osThreadId Task_UartSend;
 osThreadId Task_SensorRead;
-osThreadId Task_HearBeatLED;
 osThreadId Task_ErrorCheck;
 
 
@@ -168,13 +169,11 @@ static void MX_RTC_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_IRDA_Init(void);
 static void MX_I2C1_Init(void);
-//void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
 void func_NVM_Manager(void const* argument);
-void func_LEDBlink (void const* argument);
 void func_UartPrint (void const* argument);
 void func_SensorRead (void const* argument);
 void vApplicationTickHook(void);
@@ -188,6 +187,7 @@ void vApplicationTickHook(void);
 int main(void)
 {
 
+  GPIO_InitTypeDef GPIO_InitStruct;
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -242,9 +242,6 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
 
-  osThreadDef(HeartBeat, func_LEDBlink, osPriorityNormal, 0 , 64);
-  Task_HearBeatLED = osThreadCreate(osThread(HeartBeat),NULL);
-
   osThreadDef(HTS221_sensor, func_SensorRead, osPriorityNormal, 0, 96);
   Task_SensorRead = osThreadCreate(osThread(HTS221_sensor),NULL);
 
@@ -276,6 +273,18 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
  
   EEPROM_Initialize();
+
+  GPIO_InitStruct.Pin = LD2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+  HeartBeat_LED_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  Console_link(&huart2);
+
+
+
   /* Start scheduler */
   osKernelStart();
   
@@ -535,7 +544,6 @@ void func_NVM_Manager(void const* argument){
 	for(;;){
 //			TODO: Copy data from Queue then write into the EEPROM.
 		xQueueReceive(Queue_SendTo_TaskNVM,&Rawdata,portMAX_DELAY);
-		osMutexWait(MutexEeprom, osWaitForever);
 		switch (Rawdata.EventId) {
 			case EV_ReturnFromBlinkLED:
 				break;
@@ -552,10 +560,10 @@ void func_NVM_Manager(void const* argument){
 							Ptr_address++;
 						}
 					}
-					xQueueSend(Queue_SendTo_Uart,&Uartdata,100);
+					xQueueSend(Queue_SendTo_Uart,&Uartdata,0);
 					Uart_Updatecounter = 0;
 					#else
-					xQueueSend(Queue_SendTo_Uart,&Uartdata,100);
+					xQueueSend(Queue_SendTo_Uart,&Uartdata,0);
 					Uart_Updatecounter = 0;
 					#endif
 				}
@@ -598,10 +606,10 @@ void func_NVM_Manager(void const* argument){
 					}
 					#endif
 					/*Config Low Power SleepMode*/
-					HAL_SuspendTick();
-					__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-					HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON,PWR_SLEEPENTRY_WFI);
-					HAL_ResumeTick();
+//					HAL_SuspendTick();
+//					__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+//					HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON,PWR_SLEEPENTRY_WFI);
+//					HAL_ResumeTick();
 				}
 				else {
 
@@ -611,22 +619,6 @@ void func_NVM_Manager(void const* argument){
 			default:
 				break;
 		}
-	}
-}
-
-
-void func_LEDBlink (void const* argument){
-	uint32_t xLastTickWakeup = osKernelSysTick();
-	thread1_counter = 0;
-	for(;;)
-	{
-		thread1_counter++;
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		osDelayUntil(&xLastTickWakeup,1000);
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		osDelayUntil(&xLastTickWakeup,1000);
-
-//		osDelay(1000);
 	}
 }
 
@@ -643,8 +635,10 @@ void func_UartPrint (void const* argument){
 		xQueueReceive(Queue_SendTo_Uart,&receiveData,portMAX_DELAY);
 		for(itr=0; itr< NUMBER_OF_SAMPLING; itr++){
 
+
 			strcpy(OutputText,"Thread counter: ");
-			itoa(thread1_counter,tempText,10);
+			itoa(uxTaskPriorityGet(NULL),tempText,10);
+//			itoa(thread1_counter,tempText,10);
 			strcat(OutputText,tempText);
 			strcat(OutputText,"\n");
 
@@ -677,7 +671,7 @@ void func_UartPrint (void const* argument){
 		if (Status == HAL_OK) sendReturn.dataArray[0]=0x01;
 		else sendReturn.dataArray[0]=0x00;
 		Status = 0;
-		xQueueSend(Queue_SendTo_TaskNVM,&sendReturn,100);
+		xQueueSend(Queue_SendTo_TaskNVM,&sendReturn,0);
 	}
 }
 
@@ -703,7 +697,7 @@ void func_SensorRead (void const* argument){
 		data.uTempnHumidity.uStructDataPacket.Time.uStructTime.Seconds= Time.Seconds;
 		data.uTempnHumidity.uStructDataPacket.Time.uStructTime.TimeFormat= Time.TimeFormat;
 
-		xQueueSend(Queue_SendTo_TaskNVM,&data,100);
+		xQueueSend(Queue_SendTo_TaskNVM,&data,0);
 		//TODO: Need to comment the osDelay(1000) after implementation of autowakeup function event
 //			osDelay(1000);
 			osDelayUntil(&xLastTickWakeup,1000);
@@ -748,6 +742,7 @@ void Error_Handler(void)
   /* User can add his own implementation to report the HAL error return state */
   while(1) 
   {
+	  LED_HeartBeat(NULL);
   }
   /* USER CODE END Error_Handler */ 
 }
